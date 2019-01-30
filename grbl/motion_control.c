@@ -64,6 +64,17 @@ void mc_line(float *target, plan_line_data_t *pl_data)
     else { break; }
   } while (1);
 
+
+  #ifdef POLAR
+
+    //Change from cartessian to polar coordinates
+    float target_polar[N_AXIS];
+    float x= settings.distance-target[X_AXIS];
+    target_polar[X_AXIS]=sqrt(labs(target[X_AXIS]*target[X_AXIS]+target[Y_AXIS]*target[Y_AXIS]));
+    target_polar[Y_AXIS]=sqrt(labs(x*x+target[Y_AXIS]*target[Y_AXIS]));
+    target_polar[Z_AXIS]=0.0;
+  #endif
+
   // Plan and queue motion into planner buffer
   if (plan_buffer_line(target, pl_data) == PLAN_EMPTY_BLOCK) {
     if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) {
@@ -74,7 +85,42 @@ void mc_line(float *target, plan_line_data_t *pl_data)
       }
     }
   }
+
+  #ifdef POLAR
+    gc_state.position[X_AXIS]=target[X_AXIS];
+    gc_state.position[Y_AXIS]=target[Y_AXIS];
+  #endif
 }
+
+
+#ifdef SEGMENTED_LINES
+  void mc_segmented_line(float *position, float *target, plan_line_data_t *pl_data)
+{
+  float mm_per_line_segment=2;  //TODO: move to settings
+  float mm_of_travel = hypot(target[X_AXIS] - position[X_AXIS],
+      target[Y_AXIS] - position[Y_AXIS]);
+  if (mm_of_travel < 0.001)  return;
+  uint16_t segments = floor(mm_of_travel / mm_per_line_segment);
+  if (segments) {
+
+      float linear_per_segmentX = (target[X_AXIS] - position[X_AXIS])/segments;
+      float linear_per_segmentY = (target[Y_AXIS] - position[Y_AXIS])/segments;
+
+      uint16_t i;
+    for (i = 1; i<segments; i++) { // Increment (segments-1).
+    // Update arc_target location
+    position[X_AXIS] += linear_per_segmentX;
+    position[Y_AXIS] += linear_per_segmentY;
+
+    mc_line(position, pl_data);
+    // Bail mid-circle on system abort. Runtime command check already performed by mc_line.
+    if (sys.abort) { return; }
+    } 
+  } else {
+    mc_line(position, pl_data);
+  }
+}
+#endif
 
 
 // Execute an arc in offset mode format. position == current xyz, target == target xyz,

@@ -99,6 +99,10 @@ typedef struct {
   uint8_t status_report_mask; // Mask to indicate desired report data.
   float junction_deviation;
   float arc_tolerance;
+  
+  #ifdef POLAR
+  float distance; //Distance between motors
+  #endif
 
   float rpm_max;
   float rpm_min;
